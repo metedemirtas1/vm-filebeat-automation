@@ -1,8 +1,8 @@
 filebeat.inputs:
-# Docker container logları
+# Docker container logları (sanal makine için)
 - type: container
   paths:
-    - '/var/lib/docker/containers/*/*.log'
+    - '/mnt/data-storage/docker/containers/*/*.log'
   processors:
     - add_docker_metadata:
         host: "unix:///var/run/docker.sock"
@@ -79,4 +79,4 @@ logging.files:
   path: /usr/share/filebeat/logs
   name: filebeat
   keepfiles: 7
-  permissions: 0644
+  permissions: 0644 

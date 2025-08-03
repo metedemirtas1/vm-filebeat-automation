@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# Ubuntu için Filebeat container'ını başlat
-echo "Ubuntu için Filebeat container'ı başlatılıyor..."
-
 # Mevcut filebeat container'ını durdur ve sil (eğer varsa)
 docker stop filebeat 2>/dev/null || true
 docker rm filebeat 2>/dev/null || true
 
-# Ubuntu için optimize edilmiş Filebeat container'ını başlat
+# Filebeat container'ını başlat (Ubuntu için optimize edilmiş)
 docker run -d \
   --name filebeat \
   --user=root \
@@ -20,19 +17,11 @@ docker run -d \
   --volume="/var/log/containers:/var/log/containers:ro" \
   --volume="/proc:/host/proc:ro" \
   --volume="/sys:/host/sys:ro" \
+  --volume="/var/run/docker.sock:/var/run/docker.sock:ro" \
   --network="host" \
   docker.elastic.co/beats/filebeat:8.11.0
 
-echo "✅ Filebeat container başlatıldı!"
-echo ""
-echo "📋 Kontrol komutları:"
-echo "  • Container durumu: docker ps | grep filebeat"
-echo "  • Container logları: docker logs filebeat"
-echo "  • Elasticsearch test: docker exec filebeat filebeat test output"
-echo "  • Filebeat logları: docker exec filebeat tail -f /usr/share/filebeat/logs/filebeat-$(date +%Y%m%d).ndjson"
-echo ""
-echo "🌐 Kibana'da logları görüntülemek için:"
-echo "  • https://kibana.emm-cyber.de"
-echo "  • Kullanıcı: kibana_user"
-echo "  • Şifre: KibanaPass123!"
-echo "  • Index pattern: docker-logs-*" 
+echo "Filebeat container başlatıldı!"
+echo "Logları kontrol etmek için: docker logs filebeat"
+echo "Elasticsearch bağlantısını test etmek için: docker exec filebeat filebeat test output"
+echo "Container durumunu kontrol etmek için: docker ps | grep filebeat"
