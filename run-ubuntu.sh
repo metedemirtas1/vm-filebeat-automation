@@ -8,9 +8,12 @@ docker stop filebeat 2>/dev/null || true
 docker rm filebeat 2>/dev/null || true
 
 # Dosya izinlerini düzelt (Jenkins için)
-echo "Dosya izinleri düzeltiliyor..."
+echo "Dosya izinlerini düzeltiliyor..."
 sudo chown root:root filebeat-ubuntu.yml 2>/dev/null || true
 sudo chmod 644 filebeat-ubuntu.yml 2>/dev/null || true
+
+# Container logs dizinini oluştur
+mkdir -p "$(pwd)/container-logs"
 
 # Ubuntu için optimize edilmiş Filebeat container'ını başlat
 docker run -d \
@@ -20,6 +23,8 @@ docker run -d \
   -e ELASTIC_PASSWORD=ElasticPass123! \
   --volume="$(pwd)/filebeat-ubuntu.yml:/usr/share/filebeat/filebeat.yml:ro" \
   --volume="/mnt/data-storage/docker/containers:/var/lib/docker/containers:ro" \
+  --volume="$(pwd)/container-logs:/mnt/data-storage/jenkins-workspace/workspace/qgpt-send-container-logs-to-elastic/container-logs:ro" \
+  --volume="/mnt/data-storage/docker/containers:/mnt/data-storage/docker/containers:ro" \
   --volume="/var/run/docker.sock:/var/run/docker.sock:ro" \
   --volume="/var/log:/var/log:ro" \
   --volume="/var/log/containers:/var/log/containers:ro" \

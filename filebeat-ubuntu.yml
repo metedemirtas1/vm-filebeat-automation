@@ -1,16 +1,17 @@
 filebeat.inputs:
-# Docker container logları (sanal makine için)
-- type: log
+# Docker container logları - otomatik olarak tüm container loglarını okur
+- type: container
   enabled: true
   paths:
-    - '/var/lib/docker/containers/*/*.log'
     - '/mnt/data-storage/docker/containers/*/*.log'
-  json.keys_under_root: true
-  json.add_error_key: true
-  json.message_key: log
-  fields:
-    log_type: "docker"
-  fields_under_root: true
+  stream: all
+  processors:
+    - add_docker_metadata: ~
+    - decode_json_fields:
+        fields: ["log"]
+        target: ""
+        overwrite_keys: true
+        add_error_key: true
 
 # Sistem logları (Ubuntu)
 - type: log
@@ -39,7 +40,9 @@ processors:
 - add_host_metadata:
     when.not.contains.tags: forwarded
 - add_cloud_metadata: ~
-- add_docker_metadata: ~
+- add_fields:
+    fields:
+      source: "docker_logs"
 
 output.elasticsearch:
   hosts: ["elasticsearch.emm-cyber.de:443"]
@@ -63,7 +66,7 @@ setup.kibana:
   protocol: "https"
   ssl.verification_mode: "none"  # Self-signed sertifika için
 
-logging.level: debug
+logging.level: info
 logging.to_files: true
 logging.files:
   path: /usr/share/filebeat/logs
