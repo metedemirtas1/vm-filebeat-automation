@@ -7,6 +7,11 @@ echo "Ubuntu için Filebeat container'ı başlatılıyor..."
 docker stop filebeat 2>/dev/null || true
 docker rm filebeat 2>/dev/null || true
 
+# Dosya izinlerini düzelt (Jenkins için)
+echo "Dosya izinleri düzeltiliyor..."
+sudo chown root:root filebeat-ubuntu.yml 2>/dev/null || true
+sudo chmod 644 filebeat-ubuntu.yml 2>/dev/null || true
+
 # Ubuntu için optimize edilmiş Filebeat container'ını başlat
 docker run -d \
   --name filebeat \
@@ -14,7 +19,7 @@ docker run -d \
   -e ELASTIC_USERNAME=elastic \
   -e ELASTIC_PASSWORD=ElasticPass123! \
   --volume="$(pwd)/filebeat-ubuntu.yml:/usr/share/filebeat/filebeat.yml:ro" \
-  --volume="/var/lib/docker/containers:/var/lib/docker/containers:ro" \
+  --volume="/mnt/data-storage/docker/containers:/var/lib/docker/containers:ro" \
   --volume="/var/run/docker.sock:/var/run/docker.sock:ro" \
   --volume="/var/log:/var/log:ro" \
   --volume="/var/log/containers:/var/log/containers:ro" \
