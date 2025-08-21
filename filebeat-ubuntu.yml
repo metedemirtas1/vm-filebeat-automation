@@ -3,8 +3,10 @@ filebeat.inputs:
 - type: container
   enabled: true
   paths:
-    - '/mnt/data-storage/docker/containers/*/*.log'
+    - '/var/lib/docker/containers/*/*-json.log'
     - '/var/lib/docker/containers/*/*.log'
+    - '/mnt/data-storage/docker/containers/*/*-json.log'
+    - '/mnt/data-storage/docker/containers/*/*.log'
   stream: all
   processors:
     - add_docker_metadata: ~
@@ -13,6 +15,84 @@ filebeat.inputs:
         target: ""
         overwrite_keys: true
         add_error_key: true
+    - add_fields:
+        fields:
+          log_source: "docker_container"
+          log_type: "container"
+    - add_fields:
+        fields:
+          container_id: "${data.docker.container.id}"
+          container_name: "${data.docker.container.name}"
+          container_image: "${data.docker.container.image}"
+
+# Docker container logları için alternatif yaklaşım (log type)
+- type: log
+  enabled: true
+  paths:
+    - '/var/lib/docker/containers/*/*-json.log'
+    - '/mnt/data-storage/docker/containers/*/*-json.log'
+  fields:
+    log_type: "docker_container_json"
+    log_source: "docker_container"
+  fields_under_root: true
+  multiline.pattern: '^\{'
+  multiline.negate: true
+  multiline.match: after
+  processors:
+    - decode_json_fields:
+        fields: ["log"]
+        target: ""
+        overwrite_keys: true
+        add_error_key: true
+    - add_docker_metadata: ~
+    - add_fields:
+        fields:
+          container_id: "${data.docker.container.id}"
+          container_name: "${data.docker.container.name}"
+          container_image: "${data.docker.container.image}"
+    - script:
+        lang: javascript
+        source: >
+          function process(event) {
+            // Container ID'yi path'den çıkar
+            var path = event.Get("log.file.path");
+            if (path) {
+              var match = path.match(/\/([a-f0-9]{64})\//);
+              if (match) {
+                event.Put("container_id_from_path", match[1]);
+              }
+            }
+            
+            // Timestamp'i parse et
+            var timestamp = event.Get("time");
+            if (timestamp) {
+              event.Put("@timestamp", timestamp);
+            }
+            
+            return event;
+          }
+
+# Docker daemon logları
+- type: log
+  enabled: true
+  paths:
+    - '/var/log/docker.log'
+    - '/var/log/docker/*.log'
+  fields:
+    log_type: "docker_daemon"
+    log_source: "docker_daemon"
+  fields_under_root: true
+
+# Docker systemd logları
+- type: log
+  enabled: true
+  paths:
+    - '/var/log/journal/*/docker.service.log'
+    - '/var/log/journal/*/docker.service.log.*'
+  fields:
+    log_type: "docker_systemd"
+    log_source: "docker_systemd"
+  fields_under_root: true
 
 # Sistem logları (Ubuntu)
 #- type: log
@@ -25,6 +105,7 @@ filebeat.inputs:
 #    - /var/log/apt/history.log
 #  fields:
 #    log_type: "system"
+#    log_source: "system"
 #  fields_under_root: true
 
 # Application logları
@@ -35,7 +116,20 @@ filebeat.inputs:
     - /var/log/*/*.log
   fields:
     log_type: "application"
+    log_source: "application"
   fields_under_root: true
+
+# Docker events (real-time container events)
+- type: docker
+  enabled: true
+  containers.ids:
+    - "*"
+  processors:
+    - add_docker_metadata: ~
+    - add_fields:
+        fields:
+          log_source: "docker_events"
+          log_type: "docker_event"
 
 processors:
 - add_host_metadata:
@@ -44,6 +138,12 @@ processors:
 - add_fields:
     fields:
       source: "docker_logs"
+      environment: "production"
+- timestamp:
+    field: "@timestamp"
+    timezone: "Europe/Berlin"
+- drop_fields:
+    fields: ["log.offset", "log.file.path"]
 
 output.elasticsearch:
   hosts: ["elasticsearch.emm-cyber.de:443"]
