@@ -139,9 +139,9 @@ processors:
     fields:
       source: "docker_logs"
       environment: "production"
-- timestamp:
-    field: "@timestamp"
-    timezone: "Europe/Berlin"
+- add_fields:
+    fields:
+      timezone: "Europe/Berlin"
 - drop_fields:
     fields: ["log.offset", "log.file.path"]
 
@@ -166,6 +166,14 @@ setup.kibana:
   # HTTPS kullanıyoruz
   protocol: "https"
   ssl.verification_mode: "none"  # Self-signed sertifika için
+
+# Timezone ayarı
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+# Global timezone ayarı
+setup.kibana.timezone: "Europe/Berlin"
 
 logging.level: info
 logging.to_files: true
