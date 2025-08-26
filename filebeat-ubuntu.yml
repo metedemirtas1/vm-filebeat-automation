@@ -10,7 +10,17 @@ filebeat.inputs:
   fields:
     log_source: "docker_container"
     log_type: "container"
+    include_file_info: true
   fields_under_root: true
+  
+  # Sadece son 7 günlük logları oku
+  ignore_older: 168h  # 7 gün = 168 saat
+  
+  # Dosya okuma ayarları
+  close_inactive: 1h
+  close_removed: true
+  close_renamed: true
+  
   processors:
     - add_docker_metadata: ~
     - decode_json_fields:
@@ -18,6 +28,45 @@ filebeat.inputs:
         target: ""
         overwrite_keys: true
         add_error_key: true
+    
+    # Timestamp parsing - log içindeki tarihleri doğru parse et
+    - timestamp:
+        field: log.timestamp
+        layouts:
+          - '2006-01-02T15:04:05.000000000Z'
+          - '2006-01-02T15:04:05Z'
+          - '2006-01-02 15:04:05'
+          - 'Mon Jan 02 15:04:05 UTC 2006'
+          - 'Tue Aug 26 06:02:39 UTC 2025'
+        test:
+          - '2024-01-15T10:30:45.123456789Z'
+          - '2024-01-15 10:30:45'
+        ignore_missing: true
+        ignore_failure: true
+    
+    # Container ID'sini dosya yolundan çıkar
+    - extract_array:
+        field: log.file.path
+        mapping:
+          log.file.path: "container_id"
+        separator: "/"
+        fail_on_error: false
+    
+    # Dosya bilgilerini ekle
+    - add_fields:
+        fields:
+          source_file_path: "%{[log.file.path]}"
+          source_file_name: "%{[log.file.name]}"
+          container_log_source: "%{[log.file.path]}"
+    
+    # Eski logları filtrele (2025 Temmuz'dan önceki logları atla)
+    - drop_event:
+        when:
+          and:
+            - exists: "@timestamp"
+            - range:
+                "@timestamp":
+                  lt: "2025-07-01T00:00:00Z"
 
 # Sistem logları (Ubuntu)
 - type: log
@@ -29,7 +78,16 @@ filebeat.inputs:
   fields:
     log_type: "system"
     log_source: "system"
+    include_file_info: true
   fields_under_root: true
+  
+  # Sadece son 7 günlük logları oku
+  ignore_older: 168h  # 7 gün = 168 saat
+  
+  # Dosya okuma ayarları
+  close_inactive: 1h
+  close_removed: true
+  close_renamed: true
 
 # Application logları
 - type: log
@@ -40,7 +98,16 @@ filebeat.inputs:
   fields:
     log_type: "application"
     log_source: "application"
+    include_file_info: true
   fields_under_root: true
+  
+  # Sadece son 7 günlük logları oku
+  ignore_older: 168h  # 7 gün = 168 saat
+  
+  # Dosya okuma ayarları
+  close_inactive: 1h
+  close_removed: true
+  close_renamed: true
 
 processors:
 - add_host_metadata:
@@ -51,8 +118,22 @@ processors:
       source: "docker_logs"
       environment: "production"
       timezone: "Europe/Berlin"
+      log_file_path: "%{[log.file.path]}"
+      log_file_name: "%{[log.file.name]}"
+      container_log_file: "%{[log.file.path]}"
+      file_directory: "%{[log.file.path]}"
+      file_basename: "%{[log.file.name]}"
 - drop_fields:
-    fields: ["log.offset", "log.file.path"]
+    fields: ["log.offset"]
+
+# Global log retention ayarları - 2025 Temmuz'dan önceki tüm logları atla
+- drop_event:
+    when:
+      and:
+        - exists: "@timestamp"
+        - range:
+            "@timestamp":
+              lt: "2025-07-01T00:00:00Z"
 
 output.elasticsearch:
   hosts: ["elasticsearch.emm-cyber.de:443"]
@@ -63,9 +144,38 @@ output.elasticsearch:
   # HTTPS kullanıyoruz
   protocol: "https"
   ssl.verification_mode: "none"  # Self-signed sertifika için
+  
+  # Index lifecycle management - 14 gün sonra logları sil
+  ilm.enabled: true
+  ilm.rollover_alias: "docker-logs"
+  ilm.pattern: "000001"
+  ilm.policy: "docker-logs-policy"
 
 setup.template.name: "docker-logs"
 setup.template.pattern: "docker-logs-*"
+
+# Index Lifecycle Management Policy - 14 gün sonra logları sil
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "docker-logs"
+setup.ilm.pattern: "000001"
+setup.ilm.policy: |
+  {
+    "policy": {
+      "phases": {
+        "hot": {
+          "actions": {
+            "rollover": {
+              "max_size": "5GB",
+              "max_age": "1d"
+            }
+          }
+        },
+        "delete": {
+          "min_age": "14d"
+        }
+      }
+    }
+  }
 
 setup.kibana:
   host: "kibana.emm-cyber.de:443"
