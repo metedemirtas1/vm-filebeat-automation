@@ -10,6 +10,7 @@ filebeat.inputs:
   fields:
     log_source: "docker_container"
     log_type: "container"
+    include_file_info: true
   fields_under_root: true
   
   # Sadece son 7 günlük logları oku
@@ -43,6 +44,21 @@ filebeat.inputs:
         ignore_missing: true
         ignore_failure: true
     
+    # Container ID'sini dosya yolundan çıkar
+    - extract_array:
+        field: log.file.path
+        mapping:
+          log.file.path: "container_id"
+        separator: "/"
+        fail_on_error: false
+    
+    # Dosya bilgilerini ekle
+    - add_fields:
+        fields:
+          source_file_path: "%{[log.file.path]}"
+          source_file_name: "%{[log.file.name]}"
+          container_log_source: "%{[log.file.path]}"
+    
     # Eski logları filtrele (2025 Temmuz'dan önceki logları atla)
     - drop_event:
         when:
@@ -62,6 +78,7 @@ filebeat.inputs:
   fields:
     log_type: "system"
     log_source: "system"
+    include_file_info: true
   fields_under_root: true
   
   # Sadece son 7 günlük logları oku
@@ -81,6 +98,7 @@ filebeat.inputs:
   fields:
     log_type: "application"
     log_source: "application"
+    include_file_info: true
   fields_under_root: true
   
   # Sadece son 7 günlük logları oku
@@ -100,8 +118,13 @@ processors:
       source: "docker_logs"
       environment: "production"
       timezone: "Europe/Berlin"
+      log_file_path: "%{[log.file.path]}"
+      log_file_name: "%{[log.file.name]}"
+      container_log_file: "%{[log.file.path]}"
+      file_directory: "%{[log.file.path]}"
+      file_basename: "%{[log.file.name]}"
 - drop_fields:
-    fields: ["log.offset", "log.file.path"]
+    fields: ["log.offset"]
 
 # Global log retention ayarları - 2025 Temmuz'dan önceki tüm logları atla
 - drop_event:
